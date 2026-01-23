@@ -325,7 +325,7 @@
         font-family: Arial, sans-serif;
       }
 
-      /* Fullscreen button - DESKTOP ONLY */
+      /* Fullscreen button - Hidden on mobile */
       #fullscreen-btn {
         position: absolute;
         bottom: 20px;
@@ -340,7 +340,6 @@
         z-index: 100;
         font-family: Arial, sans-serif;
         transition: all 0.3s;
-        display: none; /* Hidden by default */
       }
 
       #fullscreen-btn:hover {
@@ -350,13 +349,6 @@
 
       #fullscreen-btn:active {
         transform: scale(0.95);
-      }
-
-      /* Show fullscreen button only on desktop */
-      @media (min-width: 769px) {
-        #fullscreen-btn {
-          display: block;
-        }
       }
 
       /* Fullscreen styles for desktop */
@@ -409,6 +401,11 @@
       var unityInstance;
       var isFullscreen = false;
       var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+      // Hide fullscreen button on mobile devices
+      if (isMobile) {
+        fullscreenBtn.style.display = 'none';
+      }
 
       // Check orientation and show/hide rotation message
       function checkOrientation() {
