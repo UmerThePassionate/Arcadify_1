@@ -181,13 +181,14 @@
 
 
 
-
 <!DOCTYPE html>
 <html lang="en-us">
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Unity WebGL Player | Arcadeify</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
     <style>
@@ -203,6 +204,8 @@
         overflow: hidden;
         background: #000;
         position: fixed;
+        -webkit-user-select: none;
+        user-select: none;
       }
 
       #unity-container {
@@ -214,12 +217,28 @@
         justify-content: center;
       }
 
+      /* Fake fullscreen mode for mobile */
+      #unity-container.mobile-fullscreen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 9999;
+      }
+
       #unity-canvas {
         width: 100%;
         height: 100%;
         display: block;
         background: #000;
         touch-action: none;
+      }
+
+      /* When in fake fullscreen, adjust canvas */
+      #unity-container.mobile-fullscreen #unity-canvas {
+        width: 100vw;
+        height: 100vh;
       }
 
       #unity-loading-bar {
@@ -315,7 +334,7 @@
         font-family: Arial, sans-serif;
       }
 
-      /* Fullscreen button - Show on mobile when in landscape */
+      /* Fullscreen button */
       #fullscreen-btn {
         position: absolute;
         bottom: 20px;
@@ -327,7 +346,7 @@
         border-radius: 5px;
         cursor: pointer;
         font-size: 14px;
-        z-index: 100;
+        z-index: 10000;
         font-family: Arial, sans-serif;
         transition: all 0.3s;
         display: block;
@@ -342,27 +361,22 @@
         transform: scale(0.95);
       }
 
-      /* Allow keyboard in fullscreen */
+      /* Hide address bar on mobile when in fake fullscreen */
+      body.hide-ui {
+        position: fixed;
+        overflow: hidden;
+      }
+
+      /* Real fullscreen for desktop */
       #unity-container:fullscreen,
       #unity-container:-webkit-full-screen,
       #unity-container:-moz-full-screen,
       #unity-container:-ms-fullscreen {
         overflow: visible !important;
       }
-
-      /* Hidden input for iOS keyboard workaround */
-      #keyboard-helper {
-        position: absolute;
-        opacity: 0;
-        pointer-events: none;
-        left: -9999px;
-      }
     </style>
   </head>
   <body>
-    <!-- Hidden input to help with keyboard on iOS -->
-    <input type="text" id="keyboard-helper" />
-
     <!-- Rotation Message -->
     <div id="rotation-message">
       <div id="rotation-icon">📱</div>
@@ -390,11 +404,11 @@
       var warningBanner = document.querySelector("#unity-warning");
       var rotationMessage = document.querySelector("#rotation-message");
       var fullscreenBtn = document.querySelector("#fullscreen-btn");
-      var keyboardHelper = document.querySelector("#keyboard-helper");
 
       var unityInstance;
       var isFullscreen = false;
       var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      var mobileFullscreen = false;
 
       // Check orientation and show/hide rotation message
       function checkOrientation() {
@@ -452,12 +466,46 @@
         updateBannerVisibility();
       }
 
-      // Request fullscreen with keyboard support
-      function requestFullscreenWithKeyboard() {
+      // Mobile fake fullscreen (allows keyboard to work)
+      function enterMobileFullscreen() {
+        container.classList.add('mobile-fullscreen');
+        document.body.classList.add('hide-ui');
+        mobileFullscreen = true;
+        fullscreenBtn.textContent = "⛶ Exit Fullscreen";
+        
+        // Hide address bar
+        window.scrollTo(0, 1);
+        
+        // Lock orientation to landscape if possible
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock('landscape').catch(function(error) {
+            console.log("Orientation lock failed:", error);
+          });
+        }
+        
+        resizeCanvas();
+      }
+
+      function exitMobileFullscreen() {
+        container.classList.remove('mobile-fullscreen');
+        document.body.classList.remove('hide-ui');
+        mobileFullscreen = false;
+        fullscreenBtn.textContent = "⛶ Fullscreen";
+        
+        // Unlock orientation
+        if (screen.orientation && screen.orientation.unlock) {
+          screen.orientation.unlock();
+        }
+        
+        resizeCanvas();
+      }
+
+      // Desktop real fullscreen
+      function enterDesktopFullscreen() {
         var elem = container;
         
         if (elem.requestFullscreen) {
-          elem.requestFullscreen({ navigationUI: "hide", keyboard: true }).catch(err => {
+          elem.requestFullscreen().catch(err => {
             console.log("Fullscreen error:", err);
           });
         } else if (elem.webkitRequestFullscreen) {
@@ -469,57 +517,55 @@
         }
       }
 
-      // Fullscreen toggle
+      function exitDesktopFullscreen() {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+          document.mozCancelFullScreen();
+        } else if (document.msExitFullscreen) {
+          document.msExitFullscreen();
+        }
+      }
+
+      // Fullscreen toggle button
       fullscreenBtn.onclick = function() {
-        if (!isFullscreen) {
-          requestFullscreenWithKeyboard();
+        if (isMobile) {
+          // Use fake fullscreen on mobile (allows keyboard)
+          if (!mobileFullscreen) {
+            enterMobileFullscreen();
+          } else {
+            exitMobileFullscreen();
+          }
         } else {
-          if (document.exitFullscreen) {
-            document.exitFullscreen();
-          } else if (document.webkitExitFullscreen) {
-            document.webkitExitFullscreen();
-          } else if (document.mozCancelFullScreen) {
-            document.mozCancelFullScreen();
-          } else if (document.msExitFullscreen) {
-            document.msExitFullscreen();
+          // Use real fullscreen on desktop
+          if (!isFullscreen) {
+            enterDesktopFullscreen();
+          } else {
+            exitDesktopFullscreen();
           }
         }
       };
 
-      // Track fullscreen state
-      function updateFullscreenState() {
+      // Track desktop fullscreen state
+      function updateDesktopFullscreenState() {
         isFullscreen = !!(document.fullscreenElement || 
                          document.webkitFullscreenElement || 
                          document.mozFullScreenElement || 
                          document.msFullscreenElement);
         
-        fullscreenBtn.textContent = isFullscreen ? "⛶ Exit Fullscreen" : "⛶ Fullscreen";
+        if (!isMobile) {
+          fullscreenBtn.textContent = isFullscreen ? "⛶ Exit Fullscreen" : "⛶ Fullscreen";
+        }
+        
         resizeCanvas();
       }
 
-      document.addEventListener('fullscreenchange', updateFullscreenState);
-      document.addEventListener('webkitfullscreenchange', updateFullscreenState);
-      document.addEventListener('mozfullscreenchange', updateFullscreenState);
-      document.addEventListener('msfullscreenchange', updateFullscreenState);
-
-      // iOS Safari keyboard workaround
-      // When Unity WebGL Input focuses, trigger keyboard helper
-      if (isMobile) {
-        // Listen for touch events that might be input fields
-        document.addEventListener('touchend', function(e) {
-          // Small delay to allow Unity to process the click
-          setTimeout(function() {
-            // Check if we're in fullscreen
-            if (isFullscreen) {
-              // Briefly focus helper input to ensure keyboard can appear
-              keyboardHelper.focus();
-              setTimeout(function() {
-                keyboardHelper.blur();
-              }, 100);
-            }
-          }, 100);
-        });
-      }
+      document.addEventListener('fullscreenchange', updateDesktopFullscreenState);
+      document.addEventListener('webkitfullscreenchange', updateDesktopFullscreenState);
+      document.addEventListener('mozfullscreenchange', updateDesktopFullscreenState);
+      document.addEventListener('msfullscreenchange', updateDesktopFullscreenState);
 
       // Unity configuration
       var buildUrl = "Build";
@@ -577,18 +623,19 @@
 
       // Handle viewport changes (for mobile keyboard)
       if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', resizeCanvas);
+        window.visualViewport.addEventListener('resize', function() {
+          resizeCanvas();
+        });
+        
         window.visualViewport.addEventListener('scroll', function() {
           resizeCanvas();
-          // Scroll to top to keep game centered
-          window.scrollTo(0, 0);
         });
       }
 
-      // Prevent scrolling when keyboard appears
-      window.addEventListener('scroll', function() {
-        if (isFullscreen) {
-          window.scrollTo(0, 0);
+      // Prevent pull-to-refresh on mobile
+      document.body.addEventListener('touchmove', function(e) {
+        if (mobileFullscreen) {
+          e.preventDefault();
         }
       }, { passive: false });
       
