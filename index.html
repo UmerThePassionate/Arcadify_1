@@ -181,13 +181,19 @@
 
 
 
+
+
+
+
+
 <!DOCTYPE html>
 <html lang="en-us">
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <title>Unity WebGL Player | Arcadeify</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
@@ -206,6 +212,7 @@
         position: fixed;
         -webkit-user-select: none;
         user-select: none;
+        -webkit-tap-highlight-color: transparent;
       }
 
       #unity-container {
@@ -217,28 +224,12 @@
         justify-content: center;
       }
 
-      /* Fake fullscreen mode for mobile */
-      #unity-container.mobile-fullscreen {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        z-index: 9999;
-      }
-
       #unity-canvas {
         width: 100%;
         height: 100%;
         display: block;
         background: #000;
         touch-action: none;
-      }
-
-      /* When in fake fullscreen, adjust canvas */
-      #unity-container.mobile-fullscreen #unity-canvas {
-        width: 100vw;
-        height: 100vh;
       }
 
       #unity-loading-bar {
@@ -334,7 +325,7 @@
         font-family: Arial, sans-serif;
       }
 
-      /* Fullscreen button */
+      /* Fullscreen button - DESKTOP ONLY */
       #fullscreen-btn {
         position: absolute;
         bottom: 20px;
@@ -346,10 +337,10 @@
         border-radius: 5px;
         cursor: pointer;
         font-size: 14px;
-        z-index: 10000;
+        z-index: 100;
         font-family: Arial, sans-serif;
         transition: all 0.3s;
-        display: block;
+        display: none; /* Hidden by default */
       }
 
       #fullscreen-btn:hover {
@@ -361,18 +352,28 @@
         transform: scale(0.95);
       }
 
-      /* Hide address bar on mobile when in fake fullscreen */
-      body.hide-ui {
-        position: fixed;
-        overflow: hidden;
+      /* Show fullscreen button only on desktop */
+      @media (min-width: 769px) {
+        #fullscreen-btn {
+          display: block;
+        }
       }
 
-      /* Real fullscreen for desktop */
+      /* Fullscreen styles for desktop */
       #unity-container:fullscreen,
       #unity-container:-webkit-full-screen,
       #unity-container:-moz-full-screen,
       #unity-container:-ms-fullscreen {
-        overflow: visible !important;
+        width: 100vw;
+        height: 100vh;
+      }
+
+      #unity-container:fullscreen #unity-canvas,
+      #unity-container:-webkit-full-screen #unity-canvas,
+      #unity-container:-moz-full-screen #unity-canvas,
+      #unity-container:-ms-fullscreen #unity-canvas {
+        width: 100vw;
+        height: 100vh;
       }
     </style>
   </head>
@@ -408,7 +409,6 @@
       var unityInstance;
       var isFullscreen = false;
       var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      var mobileFullscreen = false;
 
       // Check orientation and show/hide rotation message
       function checkOrientation() {
@@ -466,106 +466,48 @@
         updateBannerVisibility();
       }
 
-      // Mobile fake fullscreen (allows keyboard to work)
-      function enterMobileFullscreen() {
-        container.classList.add('mobile-fullscreen');
-        document.body.classList.add('hide-ui');
-        mobileFullscreen = true;
-        fullscreenBtn.textContent = "⛶ Exit Fullscreen";
-        
-        // Hide address bar
-        window.scrollTo(0, 1);
-        
-        // Lock orientation to landscape if possible
-        if (screen.orientation && screen.orientation.lock) {
-          screen.orientation.lock('landscape').catch(function(error) {
-            console.log("Orientation lock failed:", error);
-          });
-        }
-        
-        resizeCanvas();
-      }
-
-      function exitMobileFullscreen() {
-        container.classList.remove('mobile-fullscreen');
-        document.body.classList.remove('hide-ui');
-        mobileFullscreen = false;
-        fullscreenBtn.textContent = "⛶ Fullscreen";
-        
-        // Unlock orientation
-        if (screen.orientation && screen.orientation.unlock) {
-          screen.orientation.unlock();
-        }
-        
-        resizeCanvas();
-      }
-
-      // Desktop real fullscreen
-      function enterDesktopFullscreen() {
-        var elem = container;
-        
-        if (elem.requestFullscreen) {
-          elem.requestFullscreen().catch(err => {
-            console.log("Fullscreen error:", err);
-          });
-        } else if (elem.webkitRequestFullscreen) {
-          elem.webkitRequestFullscreen();
-        } else if (elem.mozRequestFullScreen) {
-          elem.mozRequestFullScreen();
-        } else if (elem.msRequestFullscreen) {
-          elem.msRequestFullscreen();
-        }
-      }
-
-      function exitDesktopFullscreen() {
-        if (document.exitFullscreen) {
-          document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen();
-        } else if (document.mozCancelFullScreen) {
-          document.mozCancelFullScreen();
-        } else if (document.msExitFullscreen) {
-          document.msExitFullscreen();
-        }
-      }
-
-      // Fullscreen toggle button
+      // Fullscreen toggle (Desktop only)
       fullscreenBtn.onclick = function() {
-        if (isMobile) {
-          // Use fake fullscreen on mobile (allows keyboard)
-          if (!mobileFullscreen) {
-            enterMobileFullscreen();
-          } else {
-            exitMobileFullscreen();
+        if (!isFullscreen) {
+          // Enter fullscreen
+          if (container.requestFullscreen) {
+            container.requestFullscreen();
+          } else if (container.webkitRequestFullscreen) {
+            container.webkitRequestFullscreen();
+          } else if (container.mozRequestFullScreen) {
+            container.mozRequestFullScreen();
+          } else if (container.msRequestFullscreen) {
+            container.msRequestFullscreen();
           }
         } else {
-          // Use real fullscreen on desktop
-          if (!isFullscreen) {
-            enterDesktopFullscreen();
-          } else {
-            exitDesktopFullscreen();
+          // Exit fullscreen
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen();
+          } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
           }
         }
       };
 
-      // Track desktop fullscreen state
-      function updateDesktopFullscreenState() {
+      // Track fullscreen state
+      function updateFullscreenState() {
         isFullscreen = !!(document.fullscreenElement || 
                          document.webkitFullscreenElement || 
                          document.mozFullScreenElement || 
                          document.msFullscreenElement);
         
-        if (!isMobile) {
-          fullscreenBtn.textContent = isFullscreen ? "⛶ Exit Fullscreen" : "⛶ Fullscreen";
-        }
-        
+        fullscreenBtn.textContent = isFullscreen ? "⛶ Exit Fullscreen" : "⛶ Fullscreen";
         resizeCanvas();
       }
 
-      document.addEventListener('fullscreenchange', updateDesktopFullscreenState);
-      document.addEventListener('webkitfullscreenchange', updateDesktopFullscreenState);
-      document.addEventListener('mozfullscreenchange', updateDesktopFullscreenState);
-      document.addEventListener('msfullscreenchange', updateDesktopFullscreenState);
+      document.addEventListener('fullscreenchange', updateFullscreenState);
+      document.addEventListener('webkitfullscreenchange', updateFullscreenState);
+      document.addEventListener('mozfullscreenchange', updateFullscreenState);
+      document.addEventListener('msfullscreenchange', updateFullscreenState);
 
       // Unity configuration
       var buildUrl = "Build";
@@ -603,6 +545,11 @@
           loadingBar.style.display = "none";
           checkOrientation();
           resizeCanvas();
+          
+          // Hide address bar on mobile
+          if (isMobile) {
+            window.scrollTo(0, 1);
+          }
         }).catch((message) => {
           alert(message);
         });
@@ -613,7 +560,12 @@
       // Listen for orientation and resize events
       window.addEventListener('orientationchange', function() {
         checkOrientation();
-        setTimeout(resizeCanvas, 500);
+        setTimeout(function() {
+          resizeCanvas();
+          if (isMobile) {
+            window.scrollTo(0, 1); // Hide address bar
+          }
+        }, 500);
       });
       
       window.addEventListener('resize', function() {
@@ -633,8 +585,17 @@
       }
 
       // Prevent pull-to-refresh on mobile
+      var lastTouchY = 0;
+      document.body.addEventListener('touchstart', function(e) {
+        lastTouchY = e.touches[0].clientY;
+      }, { passive: true });
+
       document.body.addEventListener('touchmove', function(e) {
-        if (mobileFullscreen) {
+        var touchY = e.touches[0].clientY;
+        var touchYDelta = touchY - lastTouchY;
+        lastTouchY = touchY;
+
+        if (touchYDelta > 0 && window.pageYOffset === 0) {
           e.preventDefault();
         }
       }, { passive: false });
