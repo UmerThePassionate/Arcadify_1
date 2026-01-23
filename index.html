@@ -165,10 +165,6 @@
 
 
 
-
-
-
-
 <!DOCTYPE html>
 <html lang="en-us">
   <head>
@@ -189,6 +185,7 @@
         height: 100%;
         overflow: hidden;
         background: #000;
+        position: fixed;
       }
 
       #unity-container {
@@ -205,6 +202,7 @@
         height: 100%;
         display: block;
         background: #000;
+        touch-action: none;
       }
 
       #unity-loading-bar {
@@ -213,6 +211,7 @@
         top: 50%;
         transform: translate(-50%, -50%);
         text-align: center;
+        z-index: 1000;
       }
 
       #unity-logo {
@@ -326,6 +325,23 @@
           display: none;
         }
       }
+
+      /* Fix for keyboard in fullscreen */
+      body:fullscreen {
+        overflow: visible !important;
+      }
+
+      body:-webkit-full-screen {
+        overflow: visible !important;
+      }
+
+      body:-moz-full-screen {
+        overflow: visible !important;
+      }
+
+      body:-ms-fullscreen {
+        overflow: visible !important;
+      }
     </style>
   </head>
   <body>
@@ -358,6 +374,7 @@
       var fullscreenBtn = document.querySelector("#fullscreen-btn");
 
       var unityInstance;
+      var isFullscreen = false;
 
       // Check orientation and show/hide rotation message
       function checkOrientation() {
@@ -387,6 +404,14 @@
           var width = window.innerWidth;
           var height = window.innerHeight;
           
+          // Account for mobile browser UI and keyboard
+          if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+            // Use visualViewport if available for better keyboard handling
+            if (window.visualViewport) {
+              height = window.visualViewport.height;
+            }
+          }
+          
           canvas.style.width = width + "px";
           canvas.style.height = height + "px";
         }
@@ -411,18 +436,75 @@
         updateBannerVisibility();
       }
 
-      // Fullscreen functionality
+      // Exit fullscreen when keyboard is needed (for mobile)
+      function exitFullscreenForKeyboard() {
+        var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        
+        if (isMobile && isFullscreen) {
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen();
+          } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+          }
+        }
+      }
+
+      // Fullscreen functionality (Desktop only)
       fullscreenBtn.onclick = function() {
-        if (container.requestFullscreen) {
-          container.requestFullscreen();
-        } else if (container.webkitRequestFullscreen) {
-          container.webkitRequestFullscreen();
-        } else if (container.mozRequestFullScreen) {
-          container.mozRequestFullScreen();
-        } else if (container.msRequestFullscreen) {
-          container.msRequestFullscreen();
+        var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        
+        // Don't use fullscreen on mobile devices
+        if (isMobile) {
+          return;
+        }
+        
+        if (!isFullscreen) {
+          if (container.requestFullscreen) {
+            container.requestFullscreen();
+          } else if (container.webkitRequestFullscreen) {
+            container.webkitRequestFullscreen();
+          } else if (container.mozRequestFullScreen) {
+            container.mozRequestFullScreen();
+          } else if (container.msRequestFullscreen) {
+            container.msRequestFullscreen();
+          }
+        } else {
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen();
+          } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+          }
         }
       };
+
+      // Track fullscreen state
+      document.addEventListener('fullscreenchange', function() {
+        isFullscreen = !!document.fullscreenElement;
+        resizeCanvas();
+      });
+
+      document.addEventListener('webkitfullscreenchange', function() {
+        isFullscreen = !!document.webkitFullscreenElement;
+        resizeCanvas();
+      });
+
+      document.addEventListener('mozfullscreenchange', function() {
+        isFullscreen = !!document.mozFullScreenElement;
+        resizeCanvas();
+      });
+
+      document.addEventListener('msfullscreenchange', function() {
+        isFullscreen = !!document.msFullscreenElement;
+        resizeCanvas();
+      });
 
       // Unity configuration
       var buildUrl = "Build";
@@ -445,7 +527,7 @@
       // Set device pixel ratio for better performance on mobile
       var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       if (isMobile) {
-        config.devicePixelRatio = window.devicePixelRatio || 1;
+        config.devicePixelRatio = Math.min(window.devicePixelRatio || 1, 2);
       }
 
       canvas.style.background = "url('" + buildUrl + "/arcadify_webgl.jpg') center / cover";
@@ -470,7 +552,23 @@
 
       // Listen for orientation and resize events
       window.addEventListener('orientationchange', checkOrientation);
-      window.addEventListener('resize', checkOrientation);
+      window.addEventListener('resize', function() {
+        checkOrientation();
+        resizeCanvas();
+      });
+
+      // Handle viewport changes (for mobile keyboard)
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', resizeCanvas);
+        window.visualViewport.addEventListener('scroll', resizeCanvas);
+      }
+
+      // Listen for focus events on input fields (exit fullscreen on mobile)
+      document.addEventListener('focusin', function(e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+          exitFullscreenForKeyboard();
+        }
+      });
       
       // Initial check
       checkOrientation();
